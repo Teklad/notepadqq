@@ -1,18 +1,10 @@
 #!/bin/sh
-# Don't set `-e'!
 
 # Basic environment variables
 [ -z ${MAKE+x} ] && MAKE="make"
 [ -z ${CXX+x} ]  && CXX="c++"
-
-if which qtchooser >/dev/null 2>&1; then
-    QTCHOOSER="$(which qtchooser 2> /dev/null)"
-    [ -z ${QMAKE+x} ]    && QMAKE="$QTCHOOSER -run-tool=qmake -qt=5"
-    [ -z ${LRELEASE+x} ] && LRELEASE="$QTCHOOSER -run-tool=lrelease -qt=5"
-else
-    [ -z ${QMAKE+x} ]    && QMAKE="$(which qmake-qt5 2>/dev/null || which qmake 2>/dev/null)"
-    [ -z ${LRELEASE+x} ] && LRELEASE="$(which lrelease-qt5 2>/dev/null || which lrelease 2>/dev/null)"
-fi
+[ -z ${QMAKE+x} ]    && QMAKE="$(which qmake-qt5 2>/dev/null || which qmake 2>/dev/null)"
+[ -z ${LRELEASE+x} ] && LRELEASE="$(which lrelease-qt5 2>/dev/null || which lrelease 2>/dev/null)"
 
 help() {
 cat << EOF
@@ -52,20 +44,20 @@ Some influential environment variables:
 EOF
 }
 
-# check "toolname/description" "command" nqq_config_error
-# set nqq_config_error to 1 for an error exit, otherwise leave it empty.
-# examples:
-# check "a Git client tool" git
-# check c++ g++ 1
-# check "QT5 qmake" qmake 1 "An extra failure message"
+# Functions
+
+# nqq_check_binary(string displayName, string binaryName, bool quitOnError, string extError)
+# Checks for a given binary file using which
 nqq_check_binary() {
     fail_message="not found!"
-    [ -z ${4+x} ] || fail_message+="$4"
+    [ -z ${4+x} ] || fail_message="${fail_message} ${4}"
     printf "checking for $1... "
     t=$(basename $2)
     which $t 2>/dev/null || nqq_config_error "$fail_message" $3
 }
 
+# nqq_check_library(string libraryName)
+# Uses pkg-config to check for a given library, exits on failure
 nqq_check_library() {
     which pkg-config >/dev/null 2>&1 || return
     for l in $@; do
@@ -73,14 +65,15 @@ nqq_check_library() {
         pkg-config --libs $l 2>/dev/null || nqq_config_error "not found!" 1
     done
 }
-
+# nqq_compile_test
+# Compiles a test C++ program using the c++14 standard
+# Exits script on failure
 nqq_compile_test() {
     TESTOUT="$(mktemp)"
-    TESTPROG="#include <iostream>
-    int main(){std::cout << \"test\n\" ;return 0;}"
+    TESTPROG="#include <iostream>\nint main(){std::cout << \"test\" << std::endl ;return 0;}"
 
     printf "checking whether c++ compiler builds test program with c++14... "
-    if echo "$TESTPROG" | $CXX -xc++ -std=c++14 -o "$TESTOUT" -;then
+    if printf "$TESTPROG" | $CXX -xc++ -std=c++14 -o "$TESTOUT" -;then
         echo "ok"
     else
         nqq_config_error "error!" 1
@@ -90,12 +83,15 @@ nqq_compile_test() {
     $TESTOUT >/dev/null 2>&1 && echo "ok" || nqq_config_error "error!" 1
 }
 
+# nqq_config_error(string errorMessage, bool quitOnError)
+# Prints a config error, optionally exiting the script if 1 is passed
 nqq_config_error() {
     printf "$1\n"
     [ "$2" -eq 1 ] && exit 1
     [ "$fail_on_missing" -eq 1 ] || exit 1
 }
 
+# Parse command line arguments
 fail_on_missing=""
 while [ $# -gt 0 ]; do
     key="$1"
@@ -115,6 +111,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# Run tests
 nqq_check_binary "QT5 qmake" "$QMAKE" 1 "
 Try running configure with '--qmake /path/to/qmake'."
 nqq_check_binary lrelease "$LRELEASE" 1 "
@@ -126,12 +123,13 @@ nqq_check_binary pkg-config pkg-config
 nqq_check_library uchardet 
 nqq_check_library Qt5Core Qt5Gui Qt5Network Qt5WebEngine Qt5Widgets Qt5WebEngineWidgets Qt5PrintSupport Qt5Svg Qt5WebSockets Qt5WebChannel
 
-[ -f "Makefile" ] && make distclean 2>/dev/null 1>/dev/null || true
+[ -f "Makefile" ] && make distclean >/dev/null 2>&1 || true
 printf "generate Makefile... "
 
-$QMAKE PREFIX="$PREFIX" \
+[ -z ${CPPFLAGS+x} ] || CXXFLAGS="${CXXFLAGS} ${CPPFLAGS}"
+QT_SELECT=qt5 $QMAKE PREFIX="$PREFIX" \
 QMAKE_CXX="$CXX" \
-QMAKE_CXXFLAGS="$CXXFLAGS $CPPFLAGS" \
+QMAKE_CXXFLAGS="$CXXFLAGS" \
 QMAKE_LFLAGS="$LDFLAGS" \
 LRELEASE="$LRELEASE" \
 CONFIG+="$BUILDMODE" \
