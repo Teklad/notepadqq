@@ -2,25 +2,17 @@
 # Don't set `-e'!
 
 # Basic environment variables
-test -n "$MAKE"      || MAKE="make"
-test -n "$CXX"       || CXX="c++"
-test -n "$QTCHOOSER" || QTCHOOSER="$(which qtchooser 2> /dev/null)"
+[ -z ${MAKE+x} ] && MAKE="make"
+[ -z ${CXX+x} ]  && CXX="c++"
 
-# Use qtchooser if we have it, otherwise use which
-if test -n "$QTCHOOSER"; then
-    test -n "$QMAKE"    || QMAKE="$QTCHOOSER -run-tool=qmake -qt=5"
-    test -n "$LRELEASE" || LRELEASE="$QTCHOOSER -run-tool=lrelease -qt=5"
+if which qtchooser >/dev/null 2>&1; then
+    QTCHOOSER="$(which qtchooser 2> /dev/null)"
+    [ -z ${QMAKE+x} ]    && QMAKE="$QTCHOOSER -run-tool=qmake -qt=5"
+    [ -z ${LRELEASE+x} ] && LRELEASE="$QTCHOOSER -run-tool=lrelease -qt=5"
 else
-    test -n "$QMAKE"    || QMAKE="$(which qmake-qt5 2>/dev/null || which qmake 2>/dev/null)"
-    test -n "$LRELEASE" || LRELEASE="$(which lrelease-qt5 2>/dev/null || which lrelease 2>/dev/null)"
+    [ -z ${QMAKE+x} ]    && QMAKE="$(which qmake-qt5 2>/dev/null || which qmake 2>/dev/null)"
+    [ -z ${LRELEASE+x} ] && LRELEASE="$(which lrelease-qt5 2>/dev/null || which lrelease 2>/dev/null)"
 fi
-
-
-errorExit() {
-    echo $1
-    test x"$2" != x"1" || fail_on_missing="yes"
-    test $fail_on_missing != "yes" || exit 1
-}
 
 help() {
 cat << EOF
@@ -60,121 +52,81 @@ Some influential environment variables:
 EOF
 }
 
-# check "toolname/description" "command" errorExit
-# set errorExit to 1 for an error exit, otherwise leave it empty.
+# check "toolname/description" "command" nqq_config_error
+# set nqq_config_error to 1 for an error exit, otherwise leave it empty.
 # examples:
 # check "a Git client tool" git
 # check c++ g++ 1
-check() {
+# check "QT5 qmake" qmake 1 "An extra failure message"
+nqq_check_binary() {
+    fail_message="not found!"
+    [ -z ${4+x} ] || fail_message+="$4"
     printf "checking for $1... "
     t=$(basename $2)
-    which $t 2>/dev/null 1>/dev/null
-    test $(echo $?) -eq 0 && echo "$(which $t)" || errorExit "not found!" $3
+    which $t 2>/dev/null || nqq_config_error "$fail_message" $3
 }
 
+nqq_check_library() {
+    which pkg-config >/dev/null 2>&1 || return
+    for l in $@; do
+        printf "checking for ${l} library... "
+        pkg-config --libs $l 2>/dev/null || nqq_config_error "not found!" 1
+    done
+}
 
-fail_on_missing="no"
-while [ "$#" -ge 1 ]; do
+nqq_compile_test() {
+    TESTOUT="$(mktemp)"
+    TESTPROG="#include <iostream>
+    int main(){std::cout << \"test\n\" ;return 0;}"
+
+    printf "checking whether c++ compiler builds test program with c++14... "
+    if echo "$TESTPROG" | $CXX -xc++ -std=c++14 -o "$TESTOUT" -;then
+        echo "ok"
+    else
+        nqq_config_error "error!" 1
+    fi
+
+    printf "checking whether compiled test program works... "
+    $TESTOUT >/dev/null 2>&1 && echo "ok" || nqq_config_error "error!" 1
+}
+
+nqq_config_error() {
+    printf "$1\n"
+    [ "$2" -eq 1 ] && exit 1
+    [ "$fail_on_missing" -eq 1 ] || exit 1
+}
+
+fail_on_missing=""
+while [ $# -gt 0 ]; do
     key="$1"
     shift
-
     case $key in
-        -h|--help)
-        help
-        exit 0
-        ;;
-        -d|--debug)
-        BUILDMODE="debug"
-        echo "WARNING: Building in debug mode!"
-        ;;
-        --prefix=*) # --prefix=<something>
-        PREFIX="${key#*=}"
-        ;;
-        --prefix) # --prefix <something>
-        PREFIX="$1"
-        shift
-        ;;
-        --fail-on-missing)
-        fail_on_missing="yes"
-        ;;
-        --lrelease=*)
-        LRELEASE="${key#*=}"
-        ;;
-        --lrelease)
-        LRELEASE="$1"
-        shift
-        ;;
-        --qmake=*)
-        QMAKE="${key#*=}"
-        ;;
-        --qmake)
-        QMAKE="$1"
-        shift
-        ;;
-        --qmake-args)
-        # Leave qmake args in $@
-        break
-        ;;
-        *)
-        echo WARNING: Unknown option "$key"
-        ;;
+        -h|--help) help;exit 0;;
+        -d|--debug) BUILDMODE="debug"; echo "WARNING: Building in debug mode!";;
+        --prefix=*) PREFIX="${key#*=}";;
+        --prefix)   PREFIX="$1";shift;;
+        --fail-on-missing) fail_on_missing=1;;
+        --lrelease=*) LRELEASE="${key#*=}";;
+        --lrelease)LRELEASE="$1";shift;;
+        --qmake=*)QMAKE="${key#*=}";;
+        --qmake)QMAKE="$1";shift;;
+        --qmake-args)break;;
+        *)echo WARNING: Unknown option "$key";;
     esac
 done
 
+nqq_check_binary "QT5 qmake" "$QMAKE" 1 "
+Try running configure with '--qmake /path/to/qmake'."
+nqq_check_binary lrelease "$LRELEASE" 1 "
+Try running configure with '--lrelease /path/to/lrelease'."
+nqq_check_binary c++ "$CXX" 1
+nqq_compile_test
+nqq_check_binary make "$MAKE" 1
+nqq_check_binary pkg-config pkg-config
+nqq_check_library uchardet 
+nqq_check_library Qt5Core Qt5Gui Qt5Network Qt5WebEngine Qt5Widgets Qt5WebEngineWidgets Qt5PrintSupport Qt5Svg Qt5WebSockets Qt5WebChannel
 
-# check for QT5 qmake
-printf "checking for QT5 qmake... "
-$QMAKE -help 2>/dev/null 1>/dev/null
-test $? -eq 0 && echo "$QMAKE" || \
-    errorExit "not found!\n  Try to run configure with \`--qmake /path/to/qmake-executable'." 1
-
-# check for lrelease
-printf "checking for lrelease... "
-$LRELEASE -help 2>/dev/null 1>/dev/null
-test $? -eq 0 && echo "$LRELEASE" || \
-    errorExit "not found!\n  Try to run configure with \`--lrelease /path/to/lrelease-executable'." 1
-
-check c++ "$CXX" 1
-
-# check C++ compiler functionality
-rm -f test test.cpp
-cat << EOF > test.cpp
-#include <iostream>
-
-int main()
-{
-  std::cout << "Hello World!" << std::endl;
-  return 0;
-}
-EOF
-printf "checking whether c++ compiler builds test program... "
-$CXX -o test test.cpp && echo "ok" || errorExit "error!" 1
-printf "checking whether c++ compiler supports -std=c++0x... "
-rm -f test
-$CXX -std=c++0x -o test test.cpp && echo "ok" || errorExit "error!" 1
-printf "checking whether compiled test program works... "
-./test 2>/dev/null 1>/dev/null && echo "ok" || errorExit "error!" 1
-rm -f test test.cpp
-
-check make "$MAKE" 1
-check pkg-config pkg-config
-
-# check for libraries via pkg-config
-libraries="Qt5Core Qt5Gui Qt5Network Qt5WebEngine Qt5Widgets Qt5WebEngineWidgets Qt5PrintSupport Qt5Svg Qt5WebSockets Qt5WebChannel"
-which pkg-config 2>/dev/null 1>/dev/null
-if [ $(echo $?) -eq 0 ] ; then
-    for l in $libraries ; do
-        printf "checking for ${l} library... "
-        pkg-config --libs $l 2>/dev/null 1>/dev/null
-        test $(echo $?) -eq 0 && pkg-config --libs $l || errorExit "not found!"
-    done
-fi
-
-if [ -f "Makefile" ]; then
-    make distclean 2>/dev/null 1>/dev/null || true
-fi
-
-
+[ -f "Makefile" ] && make distclean 2>/dev/null 1>/dev/null || true
 printf "generate Makefile... "
 
 $QMAKE PREFIX="$PREFIX" \
@@ -183,4 +135,4 @@ QMAKE_CXXFLAGS="$CXXFLAGS $CPPFLAGS" \
 QMAKE_LFLAGS="$LDFLAGS" \
 LRELEASE="$LRELEASE" \
 CONFIG+="$BUILDMODE" \
-"$@" notepadqq.pro && echo "done" || errorExit "error!" 1
+"$@" notepadqq.pro && echo "done" || nqq_config_error "error!" 1
