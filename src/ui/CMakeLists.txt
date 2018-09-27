@@ -110,7 +110,7 @@ set(notepadqq_UIS
 )
 
 # Add our translations
-qt5_create_translation(notepadqq_TRANSLATIONS
+qt5_add_translation(notepadqq_TRANSLATIONS
 ../translations/notepadqq_zh.ts
 ../translations/notepadqq_de.ts
 ../translations/notepadqq_es.ts
@@ -139,17 +139,8 @@ file(APPEND "${notepadqq_TFILE}" "</qresource></RCC>")
 list(APPEND notepadqq_RESOURCES "${notepadqq_TFILE}")
 list(APPEND notepadqq_RESOURCES "resources.qrc")
 
-message(${notepadqq_TFILE})
-# If we're on Mac, don't append -bin to the binary name
-if (APPLE)
-    set(notepadqq_BIN notepadqq)
-else()
-    set(notepadqq_BIN notepadqq-bin)
-endif()
-
-
 # Add all of our source files to the notepadqq binary
-add_executable(${notepadqq_BIN}
+add_executable(${PROJECT_NAME}
     ${notepadqq_HEADERS}
     ${notepadqq_SOURCES}
     ${notepadqq_TRANSLATIONS}
@@ -157,23 +148,71 @@ add_executable(${notepadqq_BIN}
     ${notepadqq_RESOURCES}
 )
 
-# Set properties to use for notepadqq
-set_target_properties(${notepadqq_BIN}
+# Add special preprocessors to use during build
+target_compile_definitions(${PROJECT_NAME} PRIVATE 
+    QT_NO_URL_CAST_FROM_STRING=1
+)
+
+# Require that we have at least C++14
+target_compile_features(${PROJECT_NAME} PRIVATE
+    cxx_std_14
+    cxx_lambdas
+    cxx_lambda_init_captures
+)
+
+# Add extra options we can use when working on NQQ
+option(EXTRA_GCC_WARNINGS "Show extra compiler warnings for GCC" OFF)
+
+# Enable some GCC specific compiler options
+# Also enables debug optimizations for a better gdb experience
+target_compile_options(${PROJECT_NAME} PRIVATE
+    $<$<CXX_COMPILER_ID:GNU>:
+        $<$<CONFIG:Debug>:-Og>
+        -W
+        -Wall
+        -Wextra
+        -Wold-style-cast
+        -Wunused-macros
+    >
+)
+
+# Enable with cmake -DEXTRA_GCC_WARNINGS=ON ..
+# See cmake -LAH .. for all available options
+# Useful for debugging the remaining build warnings (For developers)
+# This tends to throw a few warnings for moc files so it's disabled by default
+if (EXTRA_GCC_WARNINGS)
+    target_compile_options(${PROJECT_NAME} PRIVATE
+        $<$<CXX_COMPILER_ID:GNU>:
+            -Wdouble-promotion
+            -Wduplicated-branches
+            -Wduplicated-cond
+            -Wlogical-op
+            -Wnull-dereference
+            -Wpedantic
+            -Wshadow
+            -Wsuggest-override
+            -Wuseless-cast
+        >
+    )
+endif()
+
+
+
+# Set properties for notepadqq target.  Only append -bin to the Linux target
+set_target_properties(${PROJECT_NAME}
     PROPERTIES
-    CXX_STANDARD 14
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib/notepadqq"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib/notepadqq"
+    OUTPUT_NAME ${PROJECT_NAME}$<$<PLATFORM_ID:Linux>:-bin>
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib/notepadqq"
 )
 
 # Add 3rd party include directories
-target_include_directories(${notepadqq_BIN} PRIVATE
+target_include_directories(${PROJECT_NAME} PRIVATE
     ${UCharDet_INCLUDE_DIRS}
     libs/qtpromise/include
 )
 
 # Link against our required libraries
-target_link_libraries(${notepadqq_BIN}
+target_link_libraries(${PROJECT_NAME}
     ${UCharDet_LIBRARIES}
     Qt5::Core
     Qt5::Gui
@@ -198,3 +237,11 @@ elseif(APPLE)
         MACOSX_BUNDLE YES
     )
 endif(WIN32)
+
+# Create our install rules
+if (UNIX)
+    include(GNUInstallDirs)
+    install(TARGETS ${PROJECT_NAME}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/notepadqq
+    )
+endif()
