@@ -37,5 +37,31 @@ pkg_check_modules(UCharDet REQUIRED uchardet)
 # Add subdirectories we want to build
 add_subdirectory(src)
 
-# Copy necessary files into build directory
+# Copy our launcher into the build directory for ease of use
 configure_file(support_files/launch/notepadqq "${CMAKE_BINARY_DIR}/bin/notepadqq" COPYONLY)
+
+# Install rules for support files
+if (UNIX)
+    include(GNUInstallDirs)
+    install(FILES support_files/launch/notepadqq
+        DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+                    GROUP_EXECUTE GROUP_READ
+                    WORLD_EXECUTE WORLD_READ
+    )
+    install(DIRECTORY "support_files/icons" DESTINATION "${CMAKE_INSTALL_DATADIR}")
+    install(FILES "support_files/shortcuts/notepadqq.desktop" DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
+    install(FILES "support_files/notepadqq.appdata.xml" DESTINATION "${CMAKE_INSTALL_DATADIR}/metainfo")
+
+    # Uninstall target
+    if(NOT TARGET uninstall)
+        configure_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in"
+            "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
+            IMMEDIATE @ONLY)
+
+        add_custom_target(uninstall
+            COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
+    endif()
+endif()
+

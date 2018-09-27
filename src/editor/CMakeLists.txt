@@ -28,6 +28,13 @@ foreach(item ${editor_DIRS})
     )
 endforeach()
 
+# Copy libs directory
+add_custom_command(TARGET editor POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_CURRENT_SOURCE_DIR}/${item}"
+    "${editor_BUILDDIR}/${item}"
+)
+
 # Copy files
 foreach(item ${editor_FILES})
     add_custom_command(TARGET editor POST_BUILD
@@ -36,6 +43,7 @@ foreach(item ${editor_FILES})
         "${editor_BUILDDIR}/${item}"
     )
 endforeach(item)
+
 
 
 # Install rules
