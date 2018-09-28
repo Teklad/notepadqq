@@ -196,8 +196,6 @@ if (EXTRA_GCC_WARNINGS)
     )
 endif()
 
-
-
 # Set properties for notepadqq target.  Only append -bin to the Linux target
 set_target_properties(${PROJECT_NAME}
     PROPERTIES
@@ -207,13 +205,11 @@ set_target_properties(${PROJECT_NAME}
 
 # Add 3rd party include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
-    ${UCharDet_INCLUDE_DIRS}
     libs/qtpromise/include
 )
 
 # Link against our required libraries
 target_link_libraries(${PROJECT_NAME}
-    ${UCharDet_LIBRARIES}
     Qt5::Core
     Qt5::Gui
     Qt5::Network
@@ -224,6 +220,7 @@ target_link_libraries(${PROJECT_NAME}
     Qt5::WebEngineWidgets
     Qt5::WebSockets
     Qt5::Widgets
+    UCharDet::UCharDet
 )
 
 # generate proper GUI program on specified platform

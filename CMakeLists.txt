@@ -15,10 +15,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-# First we load up pkg-config for 3rd party libraries
-find_package(PkgConfig REQUIRED)
-
-# Import all the required QT packages
+# Import all the required packages
 find_package(Qt5Core CONFIG REQUIRED)
 find_package(Qt5Gui CONFIG REQUIRED)
 find_package(Qt5LinguistTools CONFIG REQUIRED)
@@ -30,9 +27,7 @@ find_package(Qt5WebEngine CONFIG REQUIRED)
 find_package(Qt5WebEngineWidgets CONFIG REQUIRED)
 find_package(Qt5WebSockets CONFIG REQUIRED)
 find_package(Qt5Widgets CONFIG REQUIRED)
-
-# Check for 3rd party libraries that don't have find_package
-pkg_check_modules(UCharDet REQUIRED uchardet)
+find_package(UCharDet REQUIRED)
 
 # Add subdirectories we want to build
 add_subdirectory(src)
